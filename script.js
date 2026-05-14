@@ -18,6 +18,8 @@ const elements = {
   doneCount: document.getElementById("doneCount"),
   targetText: document.getElementById("targetText"),
   leftCount: document.getElementById("leftCount"),
+  estTimeCard: document.getElementById("estTimeCard"),
+  estTimeText: document.getElementById("estTimeText"),
   cooldownText: document.getElementById("cooldownText"),
   progressCircle: document.getElementById("progressCircle"),
   tapBtn: document.getElementById("tapBtn"),
@@ -58,6 +60,9 @@ let currentAudioBlobUrl = null;
 let currentAudioName = "Manual"; // Tracks currently playing audio for history
 let isAutoPlaying = false;
 const audioPlayer = new Audio();
+
+// Trigger an interface update when custom or preset audio metadata (like duration) loads
+audioPlayer.addEventListener("loadedmetadata", render);
 
 // Handle Preloaded Dropdown Selection
 elements.presetAudioSelect.addEventListener("change", (e) => {
@@ -205,6 +210,7 @@ elements.audioUpload.addEventListener("change", (e) => {
 
 elements.speedSelect.addEventListener("change", (e) => {
   audioPlayer.playbackRate = parseFloat(e.target.value);
+  render(); // Recalculate estimated time when speed changes
 });
 
 // Auto Play Logic with Realistic Breath Gap
@@ -475,6 +481,53 @@ function render() {
   let isDone = false;
 
   updateUIForTargetType();
+
+  // Preset fallbacks in case loadedmetadata hasn't fired yet
+  const presetDurations = {
+    "0514.mp3": 92, // 1m 32s
+    "0514 (1).MP3": 78, // 1m 18s
+    "0514 (2).MP3": 118, // 1m 58s
+    "0514 (3).MP3": 16, // 0m 16s
+    "0514 (4).MP3": 14, // 0m 14s
+    "0514 (5).MP3": 41, // 0m 41s
+    "0514 (6).MP3": 204, // 3m 24s
+    "0514 (7).MP3": 149, // 2m 29s
+  };
+
+  // 1. Calculate Est Time if Audio is Chosen & Target is Count
+  if (state.targetType === "count" && currentAudioId) {
+    let duration = 0;
+    if (currentAudioId === "preset" && elements.presetAudioSelect.value) {
+      duration =
+        presetDurations[elements.presetAudioSelect.value] ||
+        audioPlayer.duration;
+    } else if (audioPlayer.duration && !isNaN(audioPlayer.duration)) {
+      duration = audioPlayer.duration;
+    }
+
+    if (duration) {
+      elements.estTimeCard.classList.remove("hidden");
+      const speed = parseFloat(elements.speedSelect.value) || 1;
+      const loopTime = duration / speed + BREATH_GAP_MS / 1000;
+      const left = Math.max(state.target - state.done, 0);
+      const totalSeconds = Math.ceil(left * loopTime);
+
+      if (left === 0) {
+        elements.estTimeText.textContent = "Done";
+      } else {
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = totalSeconds % 60;
+        if (h > 0) elements.estTimeText.textContent = `${h}h ${m}m`;
+        else if (m > 0) elements.estTimeText.textContent = `${m}m ${s}s`;
+        else elements.estTimeText.textContent = `${s}s`;
+      }
+    } else {
+      elements.estTimeCard.classList.add("hidden");
+    }
+  } else {
+    elements.estTimeCard.classList.add("hidden");
+  }
 
   if (state.targetType === "time") {
     const elapsed = state.setStartedAt ? Date.now() - state.setStartedAt : 0;
