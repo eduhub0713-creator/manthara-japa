@@ -1,5 +1,5 @@
-// Version bumped to v8 to clear cache and update the new logic
-const CACHE_NAME = "manthara-counter-v8";
+// Version bumped to v9 to clear cache and update the new logic
+const CACHE_NAME = "manthara-counter-v9";
 const APP_FILES = [
   "./",
   "./index.html",
@@ -16,6 +16,7 @@ const APP_FILES = [
   "./0514 (4).MP3",
   "./0514 (5).MP3",
   "./0514 (6).MP3",
+  "./0514 (7).MP3",
 ];
 
 self.addEventListener("install", (event) => {
