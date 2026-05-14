@@ -202,11 +202,12 @@ h2 {
 
 /* Stats */
 .stats-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 16px;
 }
 .stat-card {
+  flex: 1 1 80px;
   background: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--card-border);
   border-radius: 16px;
@@ -557,9 +558,6 @@ h2 {
 @media (max-width: 600px) {
   .action-buttons {
     grid-template-columns: 1fr;
-  }
-  .stats-grid {
-    gap: 8px;
   }
   .preset-row {
     flex-wrap: wrap;
