@@ -1,13 +1,21 @@
-// Version bumped to v5 to ensure browsers update the cached files
-const CACHE_NAME = "manthara-counter-v5";
+// Version bumped to v8 to clear cache and update the new logic
+const CACHE_NAME = "manthara-counter-v8";
 const APP_FILES = [
   "./",
   "./index.html",
   "./style.css",
-  "./app.js",
+  "./script.js",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
+  // Your pre-loaded audio files
+  "./0514.mp3",
+  "./0514 (1).MP3",
+  "./0514 (2).MP3",
+  "./0514 (3).MP3",
+  "./0514 (4).MP3",
+  "./0514 (5).MP3",
+  "./0514 (6).MP3",
 ];
 
 self.addEventListener("install", (event) => {
