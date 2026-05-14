@@ -1,11 +1,11 @@
 // --- CONFIGURATION ---
 const COOLDOWN_SECONDS = 1;
-const STORAGE_KEY = "mantharaCounterState.v4";
-const HISTORY_KEY = "mantharaCounterHistory.v4";
-const DAY_MS = 24 * 60 * 60 * 1000;
+const BREATH_GAP_MS = 400; // The natural pause between loops (0.4 seconds)
+const STORAGE_KEY = "mantharaCounterState.v6";
+const HISTORY_KEY = "mantharaCounterHistory.v6";
 
 const defaultState = {
-  targetType: "count", // 'count' or 'time'
+  targetType: "count",
   target: 108,
   done: 0,
   lastTapAt: 0,
@@ -43,6 +43,7 @@ const elements = {
   audioUpload: document.getElementById("audioUpload"),
   audioLibraryList: document.getElementById("audioLibraryList"),
   speedSelect: document.getElementById("speedSelect"),
+  presetAudioSelect: document.getElementById("presetAudioSelect"),
 };
 
 let state = loadState();
@@ -54,8 +55,39 @@ let dialogTimer = null;
 let audioDB = null;
 let currentAudioId = null;
 let currentAudioBlobUrl = null;
+let currentAudioName = "Manual"; // Tracks currently playing audio for history
 let isAutoPlaying = false;
 const audioPlayer = new Audio();
+
+// Handle Preloaded Dropdown Selection
+elements.presetAudioSelect.addEventListener("change", (e) => {
+  const fileName = e.target.value;
+  if (fileName) {
+    currentAudioId = "preset";
+    currentAudioName = e.target.options[e.target.selectedIndex].text;
+
+    if (currentAudioBlobUrl) {
+      URL.revokeObjectURL(currentAudioBlobUrl);
+      currentAudioBlobUrl = null;
+    }
+
+    audioPlayer.src = fileName;
+    audioPlayer.playbackRate = parseFloat(elements.speedSelect.value);
+    elements.autoPlayBtn.disabled = false;
+
+    loadLibrary();
+    render();
+  } else {
+    if (currentAudioId === "preset") {
+      currentAudioId = null;
+      currentAudioName = "Manual";
+      audioPlayer.src = "";
+      stopAutoPlay();
+      elements.autoPlayBtn.disabled = true;
+      render();
+    }
+  }
+});
 
 // IDB Initialization
 function initAudioDB() {
@@ -89,7 +121,7 @@ async function loadLibrary() {
     const files = req.result;
     if (files.length === 0) {
       elements.audioLibraryList.innerHTML =
-        '<p class="history-empty">No audio added yet. Upload an MP3 or MP4 to start.</p>';
+        '<p class="history-empty">No custom audio added yet.</p>';
       return;
     }
 
@@ -104,20 +136,16 @@ async function loadLibrary() {
       )
       .join("");
 
-    // Attach selection events
     document.querySelectorAll(".audio-item").forEach((item) => {
       item.addEventListener("click", function (e) {
         if (e.target.classList.contains("delete-audio-btn")) return;
-        const id = Number(this.dataset.id);
-        selectAudio(id);
+        selectAudio(Number(this.dataset.id));
       });
     });
 
-    // Attach delete events
     document.querySelectorAll(".delete-audio-btn").forEach((btn) => {
       btn.addEventListener("click", async function () {
-        const id = Number(this.dataset.id);
-        await deleteAudio(id);
+        await deleteAudio(Number(this.dataset.id));
       });
     });
   };
@@ -137,6 +165,7 @@ async function deleteAudio(id) {
   tx.oncomplete = () => {
     if (currentAudioId === id) {
       currentAudioId = null;
+      currentAudioName = "Manual";
       if (currentAudioBlobUrl) URL.revokeObjectURL(currentAudioBlobUrl);
       currentAudioBlobUrl = null;
       stopAutoPlay();
@@ -154,11 +183,14 @@ async function selectAudio(id) {
     if (req.result) {
       if (currentAudioBlobUrl) URL.revokeObjectURL(currentAudioBlobUrl);
       currentAudioId = id;
+      currentAudioName = req.result.name;
       currentAudioBlobUrl = URL.createObjectURL(req.result.blob);
       audioPlayer.src = currentAudioBlobUrl;
       audioPlayer.playbackRate = parseFloat(elements.speedSelect.value);
       elements.autoPlayBtn.disabled = false;
-      loadLibrary(); // Re-render to highlight active
+
+      elements.presetAudioSelect.value = "";
+      loadLibrary();
     }
   };
 }
@@ -166,23 +198,16 @@ async function selectAudio(id) {
 elements.audioUpload.addEventListener("change", (e) => {
   const files = e.target.files;
   for (let file of files) {
-    // Check for both Audio files and MP4/Video formats which contain audio
-    if (
-      file.type.startsWith("audio/") ||
-      file.type.startsWith("video/") ||
-      file.name.endsWith(".m4a")
-    ) {
-      saveAudioFile(file);
-    }
+    saveAudioFile(file);
   }
-  e.target.value = ""; // Reset
+  e.target.value = "";
 });
 
 elements.speedSelect.addEventListener("change", (e) => {
   audioPlayer.playbackRate = parseFloat(e.target.value);
 });
 
-// Auto Play Logic
+// Auto Play Logic with Realistic Breath Gap
 function toggleAutoPlay() {
   if (state.targetType === "count" && state.done >= state.target) return;
   if (state.targetType === "time" && state.historyRecorded) return;
@@ -193,7 +218,7 @@ function toggleAutoPlay() {
     isAutoPlaying = true;
     elements.autoPlayBtn.textContent = "⏸ Pause Auto-Play";
     elements.autoPlayBtn.classList.replace("secondary-btn", "primary-btn");
-    elements.tapBtn.disabled = true; // Disable manual tap during auto
+    elements.tapBtn.disabled = true;
     playNextAudioLoop();
   }
 }
@@ -223,6 +248,7 @@ function playNextAudioLoop() {
     return;
   }
 
+  audioPlayer.currentTime = 0;
   audioPlayer.play().catch((e) => {
     console.error("Auto-play blocked:", e);
     stopAutoPlay();
@@ -259,10 +285,10 @@ audioPlayer.addEventListener("ended", () => {
     stopAutoPlay();
     render();
   } else {
-    // 0.5 SECOND GAP REQUIRED BEFORE NEXT LOOP
+    // REALISTIC GAP: Simulate a quick breath before starting next loop
     setTimeout(() => {
       if (isAutoPlaying) playNextAudioLoop();
-    }, 500);
+    }, BREATH_GAP_MS);
   }
 });
 
@@ -283,9 +309,7 @@ function playCompletionSound() {
     gainNode.connect(audioCtx.destination);
     osc.start();
     osc.stop(audioCtx.currentTime + 2);
-  } catch (e) {
-    console.error("Audio playback failed", e);
-  }
+  } catch (e) {}
 }
 
 function loadState() {
@@ -315,18 +339,11 @@ function saveHistory(history) {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
 }
 
-function cleanHistory() {
-  const cutoff = Date.now() - DAY_MS;
-  const cleaned = loadHistory().filter((item) => item.finishedAt >= cutoff);
-  saveHistory(cleaned);
-  return cleaned;
-}
-
+// Add history item with the Audio Name
 function addHistorySet({ status = "Completed", finishedAt = Date.now() } = {}) {
   if (state.done <= 0) return;
-  const history = cleanHistory();
+  const history = loadHistory();
   const startedAt = state.setStartedAt || finishedAt;
-
   const targetLabel =
     state.targetType === "time" ? `${state.target}m` : state.target;
 
@@ -337,7 +354,9 @@ function addHistorySet({ status = "Completed", finishedAt = Date.now() } = {}) {
     startedAt,
     finishedAt,
     status,
+    audioName: currentAudioName,
   });
+
   saveHistory(history);
   state.historyRecorded = true;
   state.setFinishedAt = finishedAt;
@@ -380,31 +399,56 @@ function formatDuration(start, finish) {
   return `${s}s`;
 }
 
+// Render Infinite History grouped by Days
 function renderHistory() {
-  const history = cleanHistory();
+  const history = loadHistory();
   elements.historyTotal.textContent = `${history.length} set${history.length === 1 ? "" : "s"}`;
+
   if (!history.length) {
-    elements.historyList.innerHTML = `<p class="history-empty">No completed or reset sets in the last 24 hours.</p>`;
+    elements.historyList.innerHTML = `<p class="history-empty">No history recorded yet.</p>`;
     return;
   }
-  elements.historyList.innerHTML = history
-    .map(
-      (item, index) => `
-    <article class="history-item">
-      <div class="history-header">
-        <strong>Set #${history.length - index}</strong>
-        <span class="history-pill ${item.status === "Completed" ? "completed" : "reset"}">${item.status}</span>
-      </div>
-      <div class="history-details">
-        <span>Target: <b>${item.target}</b></span>
-        <span>Count Done: <b>${item.completed}</b></span>
-        <span>Start: <b>${formatTime(item.startedAt)}</b></span>
-        <span>Time Spent: <b>${formatDuration(item.startedAt, item.finishedAt)}</b></span>
-      </div>
-    </article>
-  `,
-    )
-    .join("");
+
+  const grouped = {};
+  history.forEach((item) => {
+    const d = new Date(item.startedAt);
+    const dateKey = d.toLocaleDateString(undefined, {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    if (!grouped[dateKey]) grouped[dateKey] = [];
+    grouped[dateKey].push(item);
+  });
+
+  let html = "";
+  for (const [date, items] of Object.entries(grouped)) {
+    html += `<h3 class="history-date-header">${date}</h3>`;
+    html += items
+      .map((item) => {
+        const safeAudioName = item.audioName
+          ? item.audioName.replace(/"/g, "&quot;")
+          : "Manual";
+        return `
+      <article class="history-item">
+        <div class="history-header">
+          <strong>Set</strong>
+          <span class="history-pill ${item.status === "Completed" ? "completed" : "reset"}">${item.status}</span>
+        </div>
+        <div class="history-details">
+          <span>Target: <b>${item.target}</b></span>
+          <span>Done: <b>${item.completed}</b></span>
+          <span style="grid-column: span 2">Audio: <b class="audio-name-trunc" title="${safeAudioName}">${safeAudioName}</b></span>
+          <span>Time: <b>${formatDuration(item.startedAt, item.finishedAt)}</b></span>
+          <span>Start: <b>${formatTime(item.startedAt)}</b></span>
+        </div>
+      </article>
+      `;
+      })
+      .join("");
+  }
+  elements.historyList.innerHTML = html;
 }
 
 function getCooldownLeft() {
@@ -432,17 +476,13 @@ function render() {
 
   updateUIForTargetType();
 
-  // Progress logic based on Time vs Count
   if (state.targetType === "time") {
     const elapsed = state.setStartedAt ? Date.now() - state.setStartedAt : 0;
     const targetMs = state.target * 60 * 1000;
     const timeLeft = Math.max(targetMs - elapsed, 0);
 
     progress = state.setStartedAt ? Math.min(elapsed / targetMs, 1) : 0;
-
-    // In Time Mode, you are completely 'done' once history is recorded.
     isDone = state.historyRecorded;
-
     elements.targetText.textContent = `${state.target}m`;
     elements.leftCount.textContent = `${Math.ceil(timeLeft / 60000)}m`;
   } else {
@@ -454,7 +494,6 @@ function render() {
     elements.leftCount.textContent = left;
   }
 
-  // Update elements
   elements.doneCount.textContent = state.done;
   elements.targetInput.value = state.target;
   elements.progressCircle.style.strokeDashoffset =
@@ -479,7 +518,6 @@ function render() {
     }
     elements.autoPlayBtn.disabled = !currentAudioId;
   } else {
-    // Auto-play state
     elements.cooldownText.textContent = "Auto";
     elements.message.textContent = "Auto-play is running...";
   }
@@ -494,7 +532,6 @@ function startCooldownClock() {
   cooldownTimer = setInterval(() => {
     let needsRender = false;
 
-    // Check manual completion for Time mode if user walks away or isn't auto-playing
     if (
       state.targetType === "time" &&
       state.setStartedAt &&
@@ -507,7 +544,7 @@ function startCooldownClock() {
           playCompletionSound();
         }
       }
-      needsRender = true; // Always true to animate progress circle
+      needsRender = true;
     }
 
     if (getCooldownLeft() > 0 || needsRender || isAutoPlaying) {
@@ -523,7 +560,6 @@ function startCooldownClock() {
 
 function processTap(bypassCooldown = false) {
   if (!bypassCooldown && getCooldownLeft() > 0) return;
-
   if (state.targetType === "count" && state.done >= state.target) return;
   if (state.targetType === "time" && state.historyRecorded) return;
 
@@ -536,7 +572,6 @@ function processTap(bypassCooldown = false) {
   state.done += 1;
   state.lastTapAt = Date.now();
 
-  // Handle immediate completion if goal is Count
   if (
     state.targetType === "count" &&
     state.done >= state.target &&
@@ -545,7 +580,6 @@ function processTap(bypassCooldown = false) {
     addHistorySet({ status: "Completed", finishedAt: state.lastTapAt });
     playCompletionSound();
   }
-  // Note: Time-based completion checks are managed in the clock/interval & audio player event
 
   saveState();
   render();
@@ -576,10 +610,9 @@ elements.closeDialogBtn.addEventListener("click", () => {
   elements.timeDialog.close();
 });
 
-// Changing Goal Type
 elements.targetTypeSelect.addEventListener("change", (e) => {
   state.targetType = e.target.value;
-  state.target = state.targetType === "time" ? 15 : 108; // Reset sensible defaults
+  state.target = state.targetType === "time" ? 15 : 108;
   resetCurrentSet();
 });
 
@@ -608,7 +641,7 @@ function setTarget(value) {
 
   saveState();
   render();
-  startCooldownClock(); // Trigger clock to update UI loops immediately
+  startCooldownClock();
 }
 
 elements.targetForm.addEventListener("submit", (e) => {
@@ -622,6 +655,7 @@ document
     btn.addEventListener("click", () => setTarget(btn.dataset.target)),
   );
 elements.resetBtn.addEventListener("click", resetCurrentSet);
+
 elements.clearHistoryBtn.addEventListener("click", () => {
   saveHistory([]);
   renderHistory();
@@ -649,7 +683,7 @@ window.addEventListener("appinstalled", () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("service-worker.js");
+    navigator.serviceWorker.register("sw.js");
   });
 }
 
@@ -657,7 +691,3 @@ if ("serviceWorker" in navigator) {
 initAudioDB().then(() => loadLibrary());
 render();
 startCooldownClock();
-setInterval(() => {
-  cleanHistory();
-  renderHistory();
-}, 60 * 1000);
