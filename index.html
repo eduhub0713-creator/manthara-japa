@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#121212" />
+    <meta
+      name="description"
+      content="A premium mantra counting web app with audio auto-play, speed controls, time targets, and a custom library."
+    />
+    <title>Manthara Counter</title>
+
+    <link rel="manifest" href="manifest.json" />
+    <link rel="stylesheet" href="style.css" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  </head>
+  <body>
+    <div id="installBanner" class="install-banner hidden">
+      <span>Install Manthara Counter for offline use and easy access!</span>
+      <button id="installBtn" class="install-btn" type="button">
+        Install App
+      </button>
+    </div>
+
+    <main class="app-shell">
+      <section class="hero-card">
+        <div class="top-bar">
+          <div>
+            <p class="eyebrow">Daily Practice</p>
+            <h1>Manthara Counter</h1>
+          </div>
+        </div>
+
+        <div class="progress-wrap">
+          <svg class="progress-ring" viewBox="0 0 160 160" aria-hidden="true">
+            <circle class="ring-bg" cx="80" cy="80" r="68"></circle>
+            <circle
+              id="progressCircle"
+              class="ring-progress"
+              cx="80"
+              cy="80"
+              r="68"
+            ></circle>
+          </svg>
+          <div class="progress-center">
+            <span id="doneCount">0</span>
+            <small>completed</small>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span>Target</span>
+            <strong id="targetText">108</strong>
+          </div>
+          <div class="stat-card">
+            <span>Left</span>
+            <strong id="leftCount">108</strong>
+          </div>
+          <div class="stat-card">
+            <span>Safety</span>
+            <strong id="cooldownText">Ready</strong>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          <button id="tapBtn" class="tap-btn primary-btn" type="button">
+            Manual Tap
+          </button>
+          <button
+            id="autoPlayBtn"
+            class="tap-btn secondary-btn"
+            type="button"
+            disabled
+          >
+            ▶ Start Auto-Play
+          </button>
+        </div>
+
+        <div class="tap-area-footer">
+          <p id="message" class="message">
+            Tap manually, or select an audio track below for auto-counting.
+          </p>
+          <button
+            id="seeTimeBtn"
+            class="ghost-btn see-time-btn"
+            type="button"
+            disabled
+          >
+            See Time Summary
+          </button>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Auto-Play</p>
+            <h2>Audio Library</h2>
+          </div>
+          <div class="speed-control">
+            <label for="speedSelect">Speed:</label>
+            <select id="speedSelect">
+              <option value="1">1.00x</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.50x</option>
+              <option value="1.75">1.75x</option>
+              <option value="2">2.00x</option>
+              <option value="2.25">2.25x</option>
+              <option value="2.5">2.50x</option>
+              <option value="2.75">2.75x</option>
+              <option value="3">3.00x</option>
+              <option value="3.25">3.25x</option>
+              <option value="3.5">3.50x</option>
+              <option value="3.75">3.75x</option>
+              <option value="4">4.00x</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="audio-upload-wrapper">
+          <label class="custom-file-upload">
+            <input
+              type="file"
+              id="audioUpload"
+              accept="audio/*, video/mp4, .m4a"
+              multiple
+            />
+            + Add Audio/Video (MP3 / MP4)
+          </label>
+        </div>
+
+        <div id="audioLibraryList" class="audio-list">
+          <p class="history-empty">
+            No audio added yet. Upload an MP3 or MP4 to start.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Set Goal</p>
+            <h2>Choose your target</h2>
+          </div>
+        </div>
+
+        <div
+          class="preset-row"
+          id="presetRowCount"
+          aria-label="Preset target counts"
+        >
+          <button class="preset-btn" data-target="108" type="button">
+            108
+          </button>
+          <button class="preset-btn" data-target="1008" type="button">
+            1008
+          </button>
+          <button class="preset-btn" data-target="10000" type="button">
+            10000
+          </button>
+        </div>
+
+        <div
+          class="preset-row hidden"
+          id="presetRowTime"
+          aria-label="Preset target times"
+        >
+          <button class="preset-btn" data-target="15" type="button">15m</button>
+          <button class="preset-btn" data-target="30" type="button">30m</button>
+          <button class="preset-btn" data-target="60" type="button">1h</button>
+        </div>
+
+        <form id="targetForm" class="target-form">
+          <div class="input-row">
+            <select id="targetTypeSelect" class="type-select">
+              <option value="count">Count</option>
+              <option value="time">Time (Min)</option>
+            </select>
+            <input
+              id="targetInput"
+              type="number"
+              min="1"
+              step="1"
+              placeholder="Example: 108"
+            />
+            <button class="save-btn" type="submit">Save</button>
+          </div>
+        </form>
+
+        <div class="action-row">
+          <button id="resetBtn" class="ghost-btn" type="button">
+            Reset Current Set
+          </button>
+          <button id="clearHistoryBtn" class="ghost-btn danger" type="button">
+            Clear History
+          </button>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="section-header">
+          <div>
+            <p class="eyebrow">Last 24 Hours</p>
+            <h2>Set History</h2>
+          </div>
+          <span id="historyTotal" class="history-total">0 sets</span>
+        </div>
+        <div id="historyList" class="history-list"></div>
+      </section>
+    </main>
+
+    <dialog id="timeDialog" class="app-dialog">
+      <div class="dialog-inner">
+        <h2>Current Set Summary</h2>
+        <div class="dialog-stats">
+          <span>Current Count: <b id="diagCount">0</b></span>
+          <span>Elapsed Time: <b id="diagElapsed">0s</b></span>
+          <span>Avg Time per Tap: <b id="diagAvg">0s</b></span>
+        </div>
+        <button
+          id="closeDialogBtn"
+          class="tap-btn primary-btn"
+          type="button"
+          style="min-height: 54px; font-size: 1.2rem"
+        >
+          Close
+        </button>
+      </div>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
