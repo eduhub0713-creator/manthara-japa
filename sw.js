@@ -1,5 +1,4 @@
-// Version bumped to v10 to clear cache, handle uppercase fix, and include new file
-const CACHE_NAME = "manthara-counter-v10";
+const CACHE_NAME = "manthara-counter-v11"; // Bumped version to force update
 const APP_FILES = [
   "./",
   "./index.html",
@@ -7,26 +6,8 @@ const APP_FILES = [
   "./script.js",
   "./manifest.json",
   "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  // Pre-loaded audio files with synchronized cases
-  "./0514.MP3",
-  "./0514 (1).MP3",
-  "./0514 (2).MP3",
-  "./0514 (3).MP3",
-  "./0514 (4).MP3",
-  "./0514 (5).MP3",
-  "./0514 (6).MP3",
-  "./0514 (7).MP3",
-  "./0514 (8).MP3",
-  "./0514 (9).MP3",
-  "./0514 (10).MP3",
-  "./0514 (11).MP3",
-  "./0514 (12).MP3",
-  "./0514 (13).MP3",
-  "./0514 (14).MP3",
-  "./0514 (15).MP3",
-  "./0514 (16).MP3",
-  "./0514 (17).MP3",
+  "./icons/icon-512.png"
+  // Removed the 18 MP3 files from here so mobile installs instantly
 ];
 
 self.addEventListener("install", (event) => {
@@ -51,10 +32,23 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+// Update the fetch event to cache the MP3 files lazily as they are played
 self.addEventListener("fetch", (event) => {
   event.respondWith(
-    caches
-      .match(event.request)
-      .then((cached) => cached || fetch(event.request)),
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      return fetch(event.request).then((networkResponse) => {
+        // Cache MP3 files on the fly as the user selects them
+        if (event.request.url.includes(".MP3")) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
+          });
+        }
+        return networkResponse;
+      });
+    }),
   );
 });
