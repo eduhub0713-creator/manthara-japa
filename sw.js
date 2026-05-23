@@ -1,4 +1,4 @@
-const CACHE_NAME = "manthara-counter-v11"; // Bumped version to force update
+const CACHE_NAME = "manthara-counter-v12"; // Bumped version
 const APP_FILES = [
   "./",
   "./index.html",
@@ -6,13 +6,20 @@ const APP_FILES = [
   "./script.js",
   "./manifest.json",
   "./icons/icon-192.png",
-  "./icons/icon-512.png"
-  // Removed the 18 MP3 files from here so mobile installs instantly
+  "./icons/icon-512.png",
 ];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_FILES)),
+    caches.open(CACHE_NAME).then((cache) => {
+      // Added catch block to prevent SW installation failure if an icon is missing
+      return cache.addAll(APP_FILES).catch((err) => {
+        console.warn(
+          "Service Worker: Some files failed to cache. Ensure all paths in APP_FILES exist.",
+          err,
+        );
+      });
+    }),
   );
   self.skipWaiting();
 });
@@ -32,7 +39,6 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Update the fetch event to cache the MP3 files lazily as they are played
 self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
@@ -40,7 +46,6 @@ self.addEventListener("fetch", (event) => {
         return cachedResponse;
       }
       return fetch(event.request).then((networkResponse) => {
-        // Cache MP3 files on the fly as the user selects them
         if (event.request.url.includes(".MP3")) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
