@@ -64,13 +64,6 @@ const audioPlayer = new Audio();
 // Trigger an interface update when custom or preset audio metadata (like duration) loads
 audioPlayer.addEventListener("loadedmetadata", render);
 
-// Handle global audio error states smoothly
-audioPlayer.addEventListener("error", () => {
-  console.error("AudioPlayer Error instance:", audioPlayer.error);
-  stopAutoPlay();
-  elements.message.textContent = "Error playing track. Check file location or connection.";
-});
-
 // Handle Preloaded Dropdown Selection
 elements.presetAudioSelect.addEventListener("change", (e) => {
   const fileName = e.target.value;
@@ -84,7 +77,6 @@ elements.presetAudioSelect.addEventListener("change", (e) => {
     }
 
     audioPlayer.src = fileName;
-    audioPlayer.load(); // CRITICAL FIX: Forces element structure update
     audioPlayer.playbackRate = parseFloat(elements.speedSelect.value);
     elements.autoPlayBtn.disabled = false;
 
@@ -95,7 +87,6 @@ elements.presetAudioSelect.addEventListener("change", (e) => {
       currentAudioId = null;
       currentAudioName = "Manual";
       audioPlayer.src = "";
-      audioPlayer.load();
       stopAutoPlay();
       elements.autoPlayBtn.disabled = true;
       render();
@@ -182,8 +173,6 @@ async function deleteAudio(id) {
       currentAudioName = "Manual";
       if (currentAudioBlobUrl) URL.revokeObjectURL(currentAudioBlobUrl);
       currentAudioBlobUrl = null;
-      audioPlayer.src = "";
-      audioPlayer.load();
       stopAutoPlay();
     }
     loadLibrary();
@@ -202,7 +191,6 @@ async function selectAudio(id) {
       currentAudioName = req.result.name;
       currentAudioBlobUrl = URL.createObjectURL(req.result.blob);
       audioPlayer.src = currentAudioBlobUrl;
-      audioPlayer.load(); // CRITICAL FIX: Forces reload of pipeline on custom files
       audioPlayer.playbackRate = parseFloat(elements.speedSelect.value);
       elements.autoPlayBtn.disabled = false;
 
@@ -267,12 +255,11 @@ function playNextAudioLoop() {
   }
 
   audioPlayer.currentTime = 0;
-  audioPlayer.playbackRate = parseFloat(elements.speedSelect.value);
   audioPlayer.play().catch((e) => {
     console.error("Auto-play blocked:", e);
     stopAutoPlay();
     elements.message.textContent =
-      "Playback blocked or track not found. Please try again or re-select.";
+      "Auto-play was blocked by browser. Check file names and interact with the page first.";
   });
 }
 
@@ -495,17 +482,26 @@ function render() {
 
   updateUIForTargetType();
 
-  // Preset fallbacks with modernized paths
+  // Preset fallbacks in case loadedmetadata hasn't fired yet
   const presetDurations = {
-    "./0514.MP3": 92, // 1m 32s (Jala Nandala)
-    "./0514 (1).MP3": 78, // 1m 18s
-    "./0514 (2).MP3": 118, // 1m 58s
-    "./0514 (3).MP3": 16, // 0m 16s
-    "./0514 (4).MP3": 14, // 0m 14s
-    "./0514 (5).MP3": 41, // 0m 41s
-    "./0514 (6).MP3": 204, // 3m 24s
-    "./0514 (7).MP3": 149, // 2m 29s
-    "./0514 (8).MP3": 120, // 2m 00s
+    "0514.MP3": 92, // 1m 32s
+    "0514 (1).MP3": 78, // 1m 18s
+    "0514 (2).MP3": 118, // 1m 58s
+    "0514 (3).MP3": 16, // 0m 16s
+    "0514 (4).MP3": 14, // 0m 14s
+    "0514 (5).MP3": 41, // 0m 41s
+    "0514 (6).MP3": 204, // 3m 24s
+    "0514 (7).MP3": 149, // 2m 29s
+    "0514 (8).MP3": 120, // 2m 0s
+    "0514 (9).MP3": 420, // 7m 0s
+    "0514 (10).MP3": 168, // 2m 48s
+    "0514 (11).MP3": 175, // 2m 55s
+    "0514 (12).MP3": 256, // 4m 16s
+    "0514 (13).MP3": 306, // 5m 6s
+    "0514 (14).MP3": 310, // 5m 10s
+    "0514 (15).MP3": 139, // 2m 19s
+    "0514 (16).MP3": 1724, // 28m 44s
+    "0514 (17).MP3": 374, // 6m 14s
   };
 
   // 1. Calculate Est Time if Audio is Chosen & Target is Count
