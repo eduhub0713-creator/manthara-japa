@@ -556,10 +556,83 @@ h2 {
 }
 
 @media (max-width: 600px) {
-  .action-buttons {
-    grid-template-columns: 1fr;
+  /* 1. Reduce outer padding to give content more breathing room */
+  .app-shell {
+    padding: 16px;
+    gap: 16px;
   }
+  .hero-card,
+  .panel-card {
+    padding: 20px 16px;
+    gap: 20px;
+  }
+
+  /* 2. Slightly larger font sizes for mobile readability */
+  .eyebrow {
+    font-size: 0.95rem;
+  }
+  h2 {
+    font-size: 1.4rem;
+  }
+  .stat-card span {
+    font-size: 0.95rem;
+  }
+  .stat-card strong {
+    font-size: 1.7rem;
+  }
+  .audio-item-name {
+    font-size: 1.05rem;
+  }
+  .history-details {
+    font-size: 0.95rem;
+  }
+
+  /* 3. Layout adjustments for natural vertical scrolling */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Forces a neat 2x2 grid instead of wrapping oddly */
+    gap: 12px;
+  }
+
+  .action-buttons {
+    grid-template-columns: 1fr; /* Stack manual and auto-play buttons */
+  }
+
+  /* Make main action buttons taller for easier thumb tapping */
+  .tap-btn {
+    min-height: 80px;
+    font-size: 1.4rem;
+  }
+
   .preset-row {
     flex-wrap: wrap;
+    gap: 10px;
+  }
+  .preset-btn {
+    flex: 1 1 calc(33.333% - 10px);
+    padding: 16px 8px;
+    font-size: 1.1rem;
+  }
+
+  /* Stack the target form inputs so they span full width */
+  .input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .save-btn {
+    padding: 16px;
+    font-size: 1.1rem;
+  }
+
+  /* Give the audio library list more vertical space to scroll */
+  .audio-list {
+    max-height: 280px;
+  }
+
+  /* Stack speed control below title for extra room */
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
   }
 }
