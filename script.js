@@ -34,8 +34,12 @@ const elements = {
   clearHistoryBtn: document.getElementById("clearHistoryBtn"),
   historyList: document.getElementById("historyList"),
   historyTotal: document.getElementById("historyTotal"),
-  installBanner: document.getElementById("installBanner"),
-  installBtn: document.getElementById("installBtn"),
+
+  // NEW INSTALL ELEMENTS
+  installWrapper: document.getElementById("installWrapper"),
+  mainInstallBtn: document.getElementById("mainInstallBtn"),
+  iosInstallText: document.getElementById("iosInstallText"),
+
   seeTimeBtn: document.getElementById("seeTimeBtn"),
   timeDialog: document.getElementById("timeDialog"),
   closeDialogBtn: document.getElementById("closeDialogBtn"),
@@ -861,39 +865,62 @@ elements.clearHistoryBtn.addEventListener("click", () => {
   renderHistory();
 });
 
-// INSTALLATION
+// --- UNIVERSAL INSTALLATION LOGIC ---
+// 1. Android & Desktop (Chrome, Edge, Brave)
 window.addEventListener("beforeinstallprompt", (e) => {
+  // Prevent Chrome from showing the tiny default pop-up
   e.preventDefault();
+  // Save the event to trigger it later
   deferredInstallPrompt = e;
-  elements.installBanner.classList.remove("hidden");
+
+  // Show our big custom install button if the element exists
+  if (elements.installWrapper) {
+    elements.installWrapper.classList.remove("hidden");
+  }
 });
 
-elements.installBtn.addEventListener("click", async () => {
-  if (!deferredInstallPrompt) return;
-  deferredInstallPrompt.prompt();
-  const { outcome } = await deferredInstallPrompt.userChoice;
-  if (outcome === "accepted") {
-    elements.installBanner.classList.add("hidden");
+if (elements.mainInstallBtn) {
+  elements.mainInstallBtn.addEventListener("click", async () => {
+    if (!deferredInstallPrompt) return;
+
+    // Show the native Android/PC install prompt
+    deferredInstallPrompt.prompt();
+
+    // Wait for the user to click "Install"
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    if (outcome === "accepted") {
+      // Hide the button once they accept
+      elements.installWrapper.classList.add("hidden");
+    }
+
+    deferredInstallPrompt = null;
+  });
+}
+
+// Hide the button permanently if the app is successfully installed
+window.addEventListener("appinstalled", () => {
+  if (elements.installWrapper) {
+    elements.installWrapper.classList.add("hidden");
   }
   deferredInstallPrompt = null;
 });
 
-window.addEventListener("appinstalled", () => {
-  elements.installBanner.classList.add("hidden");
-  deferredInstallPrompt = null;
-});
-
-// iOS MANUAL INSTALL INSTRUCTIONS
+// 2. Apple iOS Fallback
 const isIos = () =>
   /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
 const isInStandaloneMode = () =>
   "standalone" in window.navigator && window.navigator.standalone;
 
 if (isIos() && !isInStandaloneMode()) {
-  elements.installBanner.classList.remove("hidden");
-  elements.installBanner.querySelector("span").textContent =
-    "To install: Tap the Share icon (square with arrow) below, then select 'Add to Home Screen'.";
-  elements.installBtn.classList.add("hidden");
+  if (elements.installWrapper) {
+    elements.installWrapper.classList.remove("hidden");
+  }
+  if (elements.mainInstallBtn) {
+    elements.mainInstallBtn.classList.add("hidden");
+  }
+  if (elements.iosInstallText) {
+    elements.iosInstallText.classList.remove("hidden");
+  }
 }
 
 if ("serviceWorker" in navigator) {
