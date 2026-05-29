@@ -1,8 +1,8 @@
 // --- CONFIGURATION ---
 const COOLDOWN_SECONDS = 1;
-const BREATH_GAP_MS = 400; // The natural pause between loops (0.4 seconds)
-const STORAGE_KEY = "mantharaCounterState.v6";
-const HISTORY_KEY = "mantharaCounterHistory.v6";
+const BREATH_GAP_MS = 400; // The natural pause for standard plays
+const STORAGE_KEY = "mantharaCounterState.v7";
+const HISTORY_KEY = "mantharaCounterHistory.v7";
 
 const defaultState = {
   targetType: "count",
@@ -46,6 +46,7 @@ const elements = {
   audioLibraryList: document.getElementById("audioLibraryList"),
   speedSelect: document.getElementById("speedSelect"),
   presetAudioSelect: document.getElementById("presetAudioSelect"),
+  loopSelect: document.getElementById("loopSelect"), // New Loop Dropdown
 };
 
 let state = loadState();
@@ -57,17 +58,103 @@ let dialogTimer = null;
 let audioDB = null;
 let currentAudioId = null;
 let currentAudioBlobUrl = null;
-let currentAudioName = "Manual"; // Tracks currently playing audio for history
+let currentAudioName = "Manual";
 let isAutoPlaying = false;
 const audioPlayer = new Audio();
 
-// Trigger an interface update when custom or preset audio metadata (like duration) loads
+// --- NEW LOOP STATE ---
+let isLoopMode = false;
+let loopQueue = [];
+let currentLoopIndex = 0;
+
 audioPlayer.addEventListener("loadedmetadata", render);
 
-// Handle Preloaded Dropdown Selection
+// Gather preloaded options to build loops dynamically
+const getPresetOptions = () =>
+  Array.from(elements.presetAudioSelect.options).filter((o) => o.value !== "");
+
+// Build the specific "Loop 1" sequence
+function buildLoopOne() {
+  loopQueue = [];
+  const options = getPresetOptions();
+
+  const addTrack = (val, times) => {
+    const opt = options.find((o) => o.value === val);
+    if (opt) {
+      for (let i = 0; i < times; i++) {
+        loopQueue.push({ src: opt.value, name: opt.text });
+      }
+    }
+  };
+
+  // Specific Order as requested
+  addTrack("0514 (3).MP3", 3);
+  addTrack("0514 (4).MP3", 3);
+  addTrack("0514 (5).MP3", 3);
+  addTrack("0514 (18).MP3", 1);
+  addTrack("0514 (11).MP3", 1);
+  addTrack("0514 (9).MP3", 1);
+
+  const specificValues = [
+    "0514 (3).MP3",
+    "0514 (4).MP3",
+    "0514 (5).MP3",
+    "0514 (18).MP3",
+    "0514 (11).MP3",
+    "0514 (9).MP3",
+  ];
+
+  // The rest played exactly 1 time
+  options.forEach((opt) => {
+    if (!specificValues.includes(opt.value)) {
+      addTrack(opt.value, 1);
+    }
+  });
+}
+
+// Handle Loop Selection
+elements.loopSelect.addEventListener("change", (e) => {
+  const val = e.target.value;
+  if (val === "loop1") {
+    elements.presetAudioSelect.value = ""; // Clear standard preset
+
+    isLoopMode = true;
+    currentAudioId = "preset";
+    currentAudioName = "Loop - Set 1";
+    buildLoopOne();
+    currentLoopIndex = 0;
+
+    // Force count target to exactly match the playlist length (25)
+    state.targetType = "count";
+    state.target = loopQueue.length;
+    resetCurrentSet();
+
+    audioPlayer.src = loopQueue[0].src;
+    audioPlayer.playbackRate = parseFloat(elements.speedSelect.value);
+    elements.autoPlayBtn.disabled = false;
+  } else {
+    isLoopMode = false;
+    loopQueue = [];
+    if (!elements.presetAudioSelect.value) {
+      currentAudioId = null;
+      currentAudioName = "Manual";
+      audioPlayer.src = "";
+      stopAutoPlay();
+      elements.autoPlayBtn.disabled = true;
+    }
+  }
+  render();
+});
+
+// Handle Standard Preloaded Dropdown
 elements.presetAudioSelect.addEventListener("change", (e) => {
   const fileName = e.target.value;
   if (fileName) {
+    elements.loopSelect.value = ""; // Clear loop
+    isLoopMode = false;
+    loopQueue = [];
+    currentLoopIndex = 0;
+
     currentAudioId = "preset";
     currentAudioName = e.target.options[e.target.selectedIndex].text;
 
@@ -83,7 +170,7 @@ elements.presetAudioSelect.addEventListener("change", (e) => {
     loadLibrary();
     render();
   } else {
-    if (currentAudioId === "preset") {
+    if (currentAudioId === "preset" && !isLoopMode) {
       currentAudioId = null;
       currentAudioName = "Manual";
       audioPlayer.src = "";
@@ -187,6 +274,12 @@ async function selectAudio(id) {
   req.onsuccess = () => {
     if (req.result) {
       if (currentAudioBlobUrl) URL.revokeObjectURL(currentAudioBlobUrl);
+
+      elements.loopSelect.value = "";
+      elements.presetAudioSelect.value = "";
+      isLoopMode = false;
+      loopQueue = [];
+
       currentAudioId = id;
       currentAudioName = req.result.name;
       currentAudioBlobUrl = URL.createObjectURL(req.result.blob);
@@ -194,7 +287,6 @@ async function selectAudio(id) {
       audioPlayer.playbackRate = parseFloat(elements.speedSelect.value);
       elements.autoPlayBtn.disabled = false;
 
-      elements.presetAudioSelect.value = "";
       loadLibrary();
     }
   };
@@ -210,10 +302,10 @@ elements.audioUpload.addEventListener("change", (e) => {
 
 elements.speedSelect.addEventListener("change", (e) => {
   audioPlayer.playbackRate = parseFloat(e.target.value);
-  render(); // Recalculate estimated time when speed changes
+  render();
 });
 
-// Auto Play Logic with Realistic Breath Gap
+// Auto Play Logic
 function toggleAutoPlay() {
   if (state.targetType === "count" && state.done >= state.target) return;
   if (state.targetType === "time" && state.historyRecorded) return;
@@ -232,7 +324,11 @@ function toggleAutoPlay() {
 function stopAutoPlay() {
   isAutoPlaying = false;
   audioPlayer.pause();
-  audioPlayer.currentTime = 0;
+
+  if (!isLoopMode) {
+    audioPlayer.currentTime = 0;
+  }
+
   elements.autoPlayBtn.textContent = "▶ Start Auto-Play";
   elements.autoPlayBtn.classList.replace("primary-btn", "secondary-btn");
 
@@ -249,6 +345,17 @@ function playNextAudioLoop() {
     stopAutoPlay();
     return;
   }
+
+  if (isLoopMode) {
+    if (currentLoopIndex >= loopQueue.length) {
+      stopAutoPlay();
+      return;
+    }
+    audioPlayer.src = loopQueue[currentLoopIndex].src;
+    currentAudioName = `Loop: ${loopQueue[currentLoopIndex].name}`;
+    audioPlayer.playbackRate = parseFloat(elements.speedSelect.value);
+  }
+
   if (state.targetType === "count" && state.done >= state.target) {
     stopAutoPlay();
     return;
@@ -259,24 +366,28 @@ function playNextAudioLoop() {
     console.error("Auto-play blocked:", e);
     stopAutoPlay();
     elements.message.textContent =
-      "Auto-play was blocked by browser. Check file names and interact with the page first.";
+      "Auto-play blocked by browser. Interact with the page first.";
   });
 }
 
+// Handle audio ends, tracking loops, gaps, and progress
 audioPlayer.addEventListener("ended", () => {
   if (!isAutoPlaying) return;
 
-  // Register the count!
   processTap(true);
 
   let shouldStop = false;
 
-  // If goal is Count
+  if (isLoopMode) {
+    currentLoopIndex++;
+    if (currentLoopIndex >= loopQueue.length) {
+      shouldStop = true;
+    }
+  }
+
   if (state.targetType === "count" && state.done >= state.target) {
     shouldStop = true;
-  }
-  // If goal is Time limit
-  else if (state.targetType === "time" && state.setStartedAt) {
+  } else if (state.targetType === "time" && state.setStartedAt) {
     const elapsed = Date.now() - state.setStartedAt;
     if (elapsed >= state.target * 60 * 1000) {
       shouldStop = true;
@@ -291,10 +402,11 @@ audioPlayer.addEventListener("ended", () => {
     stopAutoPlay();
     render();
   } else {
-    // REALISTIC GAP: Simulate a quick breath before starting next loop
+    // 1000ms strict pause for Loops, variable breath gap for standard plays
+    const pauseTime = isLoopMode ? 1000 : BREATH_GAP_MS;
     setTimeout(() => {
       if (isAutoPlaying) playNextAudioLoop();
-    }, BREATH_GAP_MS);
+    }, pauseTime);
   }
 });
 
@@ -345,13 +457,14 @@ function saveHistory(history) {
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
 }
 
-// Add history item with the Audio Name
 function addHistorySet({ status = "Completed", finishedAt = Date.now() } = {}) {
   if (state.done <= 0) return;
   const history = loadHistory();
   const startedAt = state.setStartedAt || finishedAt;
   const targetLabel =
     state.targetType === "time" ? `${state.target}m` : state.target;
+
+  const finalAudioName = isLoopMode ? "Loop - Set 1" : currentAudioName;
 
   history.unshift({
     id: `${startedAt}-${finishedAt}-${Math.random().toString(16).slice(2)}`,
@@ -360,7 +473,7 @@ function addHistorySet({ status = "Completed", finishedAt = Date.now() } = {}) {
     startedAt,
     finishedAt,
     status,
-    audioName: currentAudioName,
+    audioName: finalAudioName,
   });
 
   saveHistory(history);
@@ -383,6 +496,14 @@ function resetCurrentSet() {
   state.setStartedAt = 0;
   state.setFinishedAt = 0;
   state.historyRecorded = false;
+
+  // Reset loop to start
+  currentLoopIndex = 0;
+  if (isLoopMode && loopQueue.length > 0) {
+    audioPlayer.src = loopQueue[0].src;
+    audioPlayer.playbackRate = parseFloat(elements.speedSelect.value);
+  }
+
   saveState();
   render();
 }
@@ -405,7 +526,6 @@ function formatDuration(start, finish) {
   return `${s}s`;
 }
 
-// Render Infinite History grouped by Days
 function renderHistory() {
   const history = loadHistory();
   elements.historyTotal.textContent = `${history.length} set${history.length === 1 ? "" : "s"}`;
@@ -468,10 +588,18 @@ function updateUIForTargetType() {
     elements.presetRowCount.classList.add("hidden");
     elements.presetRowTime.classList.remove("hidden");
     elements.targetInput.placeholder = "Example: 30";
+    elements.targetInput.disabled = false;
   } else {
     elements.presetRowCount.classList.remove("hidden");
     elements.presetRowTime.classList.add("hidden");
     elements.targetInput.placeholder = "Example: 108";
+
+    // Lock target if in loop mode
+    if (isLoopMode) {
+      elements.targetInput.disabled = true;
+    } else {
+      elements.targetInput.disabled = false;
+    }
   }
 }
 
@@ -482,58 +610,62 @@ function render() {
 
   updateUIForTargetType();
 
-  // Preset fallbacks in case loadedmetadata hasn't fired yet
   const presetDurations = {
-    "0514.MP3": 92, // 1m 32s
-    "0514 (1).MP3": 78, // 1m 18s
-    "0514 (2).MP3": 118, // 1m 58s
-    "0514 (3).MP3": 16, // 0m 16s
-    "0514 (4).MP3": 14, // 0m 14s
-    "0514 (5).MP3": 41, // 0m 41s
-    "0514 (6).MP3": 204, // 3m 24s
-    "0514 (7).MP3": 149, // 2m 29s
-    "0514 (8).MP3": 120, // 2m 0s
-    "0514 (9).MP3": 420, // 7m 0s
-    "0514 (10).MP3": 168, // 2m 48s
-    "0514 (11).MP3": 175, // 2m 55s
-    "0514 (12).MP3": 256, // 4m 16s
-    "0514 (13).MP3": 306, // 5m 6s
-    "0514 (14).MP3": 310, // 5m 10s
-    "0514 (15).MP3": 139, // 2m 19s
-    "0514 (16).MP3": 1724, // 28m 44s
-    "0514 (17).MP3": 374, // 6m 14s
+    "0514.MP3": 92,
+    "0514 (1).MP3": 78,
+    "0514 (2).MP3": 118,
+    "0514 (3).MP3": 16,
+    "0514 (4).MP3": 14,
+    "0514 (5).MP3": 41,
+    "0514 (6).MP3": 204,
+    "0514 (7).MP3": 149,
+    "0514 (8).MP3": 120,
+    "0514 (9).MP3": 420,
+    "0514 (10).MP3": 168,
+    "0514 (11).MP3": 175,
+    "0514 (12).MP3": 256,
+    "0514 (13).MP3": 306,
+    "0514 (14).MP3": 310,
+    "0514 (15).MP3": 139,
+    "0514 (16).MP3": 1724,
+    "0514 (17).MP3": 374,
+    "0514 (18).MP3": 243,
   };
 
-  // 1. Calculate Est Time if Audio is Chosen & Target is Count
   if (state.targetType === "count" && currentAudioId) {
-    let duration = 0;
-    if (currentAudioId === "preset" && elements.presetAudioSelect.value) {
-      duration =
-        presetDurations[elements.presetAudioSelect.value] ||
-        audioPlayer.duration;
-    } else if (audioPlayer.duration && !isNaN(audioPlayer.duration)) {
-      duration = audioPlayer.duration;
-    }
-
-    if (duration) {
-      elements.estTimeCard.classList.remove("hidden");
-      const speed = parseFloat(elements.speedSelect.value) || 1;
-      const loopTime = duration / speed + BREATH_GAP_MS / 1000;
-      const left = Math.max(state.target - state.done, 0);
-      const totalSeconds = Math.ceil(left * loopTime);
-
-      if (left === 0) {
-        elements.estTimeText.textContent = "Done";
-      } else {
-        const h = Math.floor(totalSeconds / 3600);
-        const m = Math.floor((totalSeconds % 3600) / 60);
-        const s = totalSeconds % 60;
-        if (h > 0) elements.estTimeText.textContent = `${h}h ${m}m`;
-        else if (m > 0) elements.estTimeText.textContent = `${m}m ${s}s`;
-        else elements.estTimeText.textContent = `${s}s`;
-      }
-    } else {
+    if (isLoopMode) {
+      // Hide Est Time for Loop because playlist durations vary wildly
       elements.estTimeCard.classList.add("hidden");
+    } else {
+      let duration = 0;
+      if (currentAudioId === "preset" && elements.presetAudioSelect.value) {
+        duration =
+          presetDurations[elements.presetAudioSelect.value] ||
+          audioPlayer.duration;
+      } else if (audioPlayer.duration && !isNaN(audioPlayer.duration)) {
+        duration = audioPlayer.duration;
+      }
+
+      if (duration) {
+        elements.estTimeCard.classList.remove("hidden");
+        const speed = parseFloat(elements.speedSelect.value) || 1;
+        const loopTime = duration / speed + BREATH_GAP_MS / 1000;
+        const left = Math.max(state.target - state.done, 0);
+        const totalSeconds = Math.ceil(left * loopTime);
+
+        if (left === 0) {
+          elements.estTimeText.textContent = "Done";
+        } else {
+          const h = Math.floor(totalSeconds / 3600);
+          const m = Math.floor((totalSeconds % 3600) / 60);
+          const s = totalSeconds % 60;
+          if (h > 0) elements.estTimeText.textContent = `${h}h ${m}m`;
+          else if (m > 0) elements.estTimeText.textContent = `${m}m ${s}s`;
+          else elements.estTimeText.textContent = `${s}s`;
+        }
+      } else {
+        elements.estTimeCard.classList.add("hidden");
+      }
     }
   } else {
     elements.estTimeCard.classList.add("hidden");
@@ -582,7 +714,9 @@ function render() {
     elements.autoPlayBtn.disabled = !currentAudioId;
   } else {
     elements.cooldownText.textContent = "Auto";
-    elements.message.textContent = "Auto-play is running...";
+    elements.message.textContent = isLoopMode
+      ? `Playing Loop: Track ${currentLoopIndex + 1} of ${loopQueue.length}`
+      : "Auto-play is running...";
   }
 
   elements.seeTimeBtn.disabled = state.done === 0;
@@ -674,12 +808,15 @@ elements.closeDialogBtn.addEventListener("click", () => {
 });
 
 elements.targetTypeSelect.addEventListener("change", (e) => {
+  if (isLoopMode) return; // Prevent changing types if locked in a loop
   state.targetType = e.target.value;
   state.target = state.targetType === "time" ? 15 : 108;
   resetCurrentSet();
 });
 
 function setTarget(value) {
+  if (isLoopMode) return; // Prevent modifying target while a Loop is active
+
   const nextTarget = Number.parseInt(value, 10);
   if (!Number.isFinite(nextTarget) || nextTarget < 1) return;
   state.target = nextTarget;
