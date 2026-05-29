@@ -863,19 +863,6 @@ elements.clearHistoryBtn.addEventListener("click", () => {
 
 // INSTALLATION
 window.addEventListener("beforeinstallprompt", (e) => {
-  // Check if the user is on a mobile device
-  const isMobile =
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobi/i.test(
-      navigator.userAgent,
-    );
-
-  if (isMobile) {
-    // On mobile, let the browser's native "Add to Home Screen" prompt handle it.
-    // We do NOT intercept it, so it will show up naturally.
-    return;
-  }
-
-  // On desktop/PC, intercept the prompt and show your custom install banner
   e.preventDefault();
   deferredInstallPrompt = e;
   elements.installBanner.classList.remove("hidden");
@@ -885,7 +872,9 @@ elements.installBtn.addEventListener("click", async () => {
   if (!deferredInstallPrompt) return;
   deferredInstallPrompt.prompt();
   const { outcome } = await deferredInstallPrompt.userChoice;
-  if (outcome === "accepted") elements.installBanner.classList.add("hidden");
+  if (outcome === "accepted") {
+    elements.installBanner.classList.add("hidden");
+  }
   deferredInstallPrompt = null;
 });
 
@@ -893,6 +882,19 @@ window.addEventListener("appinstalled", () => {
   elements.installBanner.classList.add("hidden");
   deferredInstallPrompt = null;
 });
+
+// iOS MANUAL INSTALL INSTRUCTIONS
+const isIos = () =>
+  /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+const isInStandaloneMode = () =>
+  "standalone" in window.navigator && window.navigator.standalone;
+
+if (isIos() && !isInStandaloneMode()) {
+  elements.installBanner.classList.remove("hidden");
+  elements.installBanner.querySelector("span").textContent =
+    "To install: Tap the Share icon (square with arrow) below, then select 'Add to Home Screen'.";
+  elements.installBtn.classList.add("hidden");
+}
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
