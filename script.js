@@ -73,10 +73,48 @@ let currentLoopIndex = 0;
 
 audioPlayer.addEventListener("loadedmetadata", render);
 
+// --- DURATION CONFIGURATION (In Seconds) ---
+const presetDurations = {
+  "0514.MP3": 92,
+  "0514 (1).MP3": 78,
+  "0514 (2).MP3": 118,
+  "0514 (3).MP3": 16,
+  "0514 (4).MP3": 14,
+  "0514 (5).MP3": 41,
+  "0514 (6).MP3": 204,
+  "0514 (7).MP3": 149,
+  "0514 (8).MP3": 120,
+  "0514 (9).MP3": 420,
+  "0514 (10).MP3": 168,
+  "0514 (11).MP3": 175,
+  "0514 (12).MP3": 256,
+  "0514 (13).MP3": 306,
+  "0514 (14).MP3": 310,
+  "0514 (15).MP3": 139,
+  "0514 (16).MP3": 1724,
+  "0514 (17).MP3": 374,
+  "0514 (18).MP3": 243,
+  "0514 (19).MP3": 120,
+  "0514 (20).MP3": 120,
+  "0514 (21).MP3": 120,
+  "0514 (22).MP3": 120,
+};
+
+// Calculates actual target taps based on if a Loop is active
+function getActualTarget() {
+  if (state.targetType === "time") return state.target;
+  if (isLoopMode && loopQueue.length > 0) {
+    // Number of Sets * Number of Tracks in the Set
+    return state.target * loopQueue.length;
+  }
+  return state.target;
+}
+
 // Gather preloaded options to build loops dynamically
 const getPresetOptions = () =>
   Array.from(elements.presetAudioSelect.options).filter((o) => o.value !== "");
 
+// Build the specific "Loop 1" sequence
 // Build the specific "Loop 1" sequence
 function buildLoopOne() {
   loopQueue = [];
@@ -116,29 +154,100 @@ function buildLoopOne() {
   });
 }
 
-// Handle Loop Selection
-elements.loopSelect.addEventListener("change", (e) => {
+// Build the "Loop 2" sequence (Tracks 19, 20, 21, 22 played in a row)
+function buildLoopTwo() {
+  loopQueue = [];
+  const options = getPresetOptions();
+
+  const addTrack = (val) => {
+    const opt = options.find((o) => o.value === val);
+    if (opt) loopQueue.push({ src: opt.value, name: opt.text });
+  };
+
+  addTrack("0514 (19).MP3");
+  addTrack("0514 (20).MP3");
+  addTrack("0514 (21).MP3");
+  addTrack("0514 (22).MP3");
+}
+
+// --- 1. HANDLE SINGLE PRESET AUDIO SELECTION ---
+elements.presetAudioSelect.addEventListener("change", (e) => {
   const val = e.target.value;
-  if (val === "loop1") {
-    elements.presetAudioSelect.value = ""; // Clear standard preset
 
-    isLoopMode = true;
-    currentAudioId = "preset";
-    currentAudioName = "Loop - Set 1";
-    buildLoopOne();
-    currentLoopIndex = 0;
-
-    // Force count target to exactly match the playlist length (25)
-    state.targetType = "count";
-    state.target = loopQueue.length;
-    resetCurrentSet();
-
-    audioPlayer.src = loopQueue[0].src;
-    audioPlayer.playbackRate = parseFloat(elements.speedSelect.value);
-    elements.autoPlayBtn.disabled = false;
-  } else {
+  if (val) {
+    // Completely clear out any loop data
+    elements.loopSelect.value = "";
     isLoopMode = false;
     loopQueue = [];
+    currentLoopIndex = 0;
+
+    // Set as a unique single track
+    currentAudioId = "preset";
+    currentAudioName = e.target.options[e.target.selectedIndex].text;
+
+    // Load audio and unlock button
+    audioPlayer.src = val;
+    audioPlayer.playbackRate = parseFloat(elements.speedSelect.value) || 1;
+    audioPlayer.currentTime = 0;
+
+    elements.autoPlayBtn.disabled = false;
+  } else {
+    // Only lock the button if we aren't currently running a loop
+    if (!isLoopMode) {
+      currentAudioId = null;
+      currentAudioName = "Manual";
+      audioPlayer.src = "";
+      stopAutoPlay();
+      elements.autoPlayBtn.disabled = true;
+    }
+  }
+
+  render();
+});
+
+// --- 2. HANDLE LOOP SET SELECTION ---
+elements.loopSelect.addEventListener("change", (e) => {
+  const val = e.target.value;
+
+  if (val === "loop1" || val === "loop2") {
+    // Completely clear out single track selection
+    elements.presetAudioSelect.value = "";
+
+    // Set as a unique loop
+    isLoopMode = true;
+    currentAudioId = "loop"; // We use "loop" instead of "preset" to avoid confusing the UI
+
+    if (val === "loop1") {
+      currentAudioName = "Loop - Set 1";
+      buildLoopOne();
+    } else if (val === "loop2") {
+      currentAudioName = "Loop - Set 2";
+      buildLoopTwo();
+    }
+
+    currentLoopIndex = 0;
+
+    // Default to 1 Set when a new loop is picked
+    if (state.targetType === "count") {
+      state.target = 1;
+    }
+
+    // Reset the tracker board
+    resetCurrentSet();
+
+    // Load the first track of the loop and unlock the button
+    if (loopQueue.length > 0) {
+      audioPlayer.src = loopQueue[0].src;
+      audioPlayer.playbackRate = parseFloat(elements.speedSelect.value) || 1;
+      audioPlayer.currentTime = 0;
+    }
+
+    elements.autoPlayBtn.disabled = false;
+  } else {
+    // If the user selects the empty "-- Choose Loop Set --" option
+    isLoopMode = false;
+    loopQueue = [];
+
     if (!elements.presetAudioSelect.value) {
       currentAudioId = null;
       currentAudioName = "Manual";
@@ -147,42 +256,8 @@ elements.loopSelect.addEventListener("change", (e) => {
       elements.autoPlayBtn.disabled = true;
     }
   }
+
   render();
-});
-
-// Handle Standard Preloaded Dropdown
-elements.presetAudioSelect.addEventListener("change", (e) => {
-  const fileName = e.target.value;
-  if (fileName) {
-    elements.loopSelect.value = ""; // Clear loop
-    isLoopMode = false;
-    loopQueue = [];
-    currentLoopIndex = 0;
-
-    currentAudioId = "preset";
-    currentAudioName = e.target.options[e.target.selectedIndex].text;
-
-    if (currentAudioBlobUrl) {
-      URL.revokeObjectURL(currentAudioBlobUrl);
-      currentAudioBlobUrl = null;
-    }
-
-    audioPlayer.src = fileName;
-    audioPlayer.playbackRate = parseFloat(elements.speedSelect.value);
-    elements.autoPlayBtn.disabled = false;
-
-    loadLibrary();
-    render();
-  } else {
-    if (currentAudioId === "preset" && !isLoopMode) {
-      currentAudioId = null;
-      currentAudioName = "Manual";
-      audioPlayer.src = "";
-      stopAutoPlay();
-      elements.autoPlayBtn.disabled = true;
-      render();
-    }
-  }
 });
 
 // IDB Initialization
@@ -311,7 +386,8 @@ elements.speedSelect.addEventListener("change", (e) => {
 
 // Auto Play Logic
 function toggleAutoPlay() {
-  if (state.targetType === "count" && state.done >= state.target) return;
+  const actualTarget = getActualTarget();
+  if (state.targetType === "count" && state.done >= actualTarget) return;
   if (state.targetType === "time" && state.historyRecorded) return;
 
   if (isAutoPlaying) {
@@ -336,9 +412,10 @@ function stopAutoPlay() {
   elements.autoPlayBtn.textContent = "▶ Start Auto-Play";
   elements.autoPlayBtn.classList.replace("primary-btn", "secondary-btn");
 
+  const actualTarget = getActualTarget();
   const isDone =
     state.targetType === "count"
-      ? state.done >= state.target
+      ? state.done >= actualTarget
       : state.historyRecorded;
   elements.autoPlayBtn.disabled = !currentAudioId || isDone;
   render();
@@ -350,19 +427,16 @@ function playNextAudioLoop() {
     return;
   }
 
+  const actualTarget = getActualTarget();
+  if (state.targetType === "count" && state.done >= actualTarget) {
+    stopAutoPlay();
+    return;
+  }
+
   if (isLoopMode) {
-    if (currentLoopIndex >= loopQueue.length) {
-      stopAutoPlay();
-      return;
-    }
     audioPlayer.src = loopQueue[currentLoopIndex].src;
     currentAudioName = `Loop: ${loopQueue[currentLoopIndex].name}`;
     audioPlayer.playbackRate = parseFloat(elements.speedSelect.value);
-  }
-
-  if (state.targetType === "count" && state.done >= state.target) {
-    stopAutoPlay();
-    return;
   }
 
   audioPlayer.currentTime = 0;
@@ -381,15 +455,9 @@ audioPlayer.addEventListener("ended", () => {
   processTap(true);
 
   let shouldStop = false;
+  const actualTarget = getActualTarget();
 
-  if (isLoopMode) {
-    currentLoopIndex++;
-    if (currentLoopIndex >= loopQueue.length) {
-      shouldStop = true;
-    }
-  }
-
-  if (state.targetType === "count" && state.done >= state.target) {
+  if (state.targetType === "count" && state.done >= actualTarget) {
     shouldStop = true;
   } else if (state.targetType === "time" && state.setStartedAt) {
     const elapsed = Date.now() - state.setStartedAt;
@@ -406,7 +474,11 @@ audioPlayer.addEventListener("ended", () => {
     stopAutoPlay();
     render();
   } else {
-    // 1000ms strict pause for Loops, variable breath gap for standard plays
+    // If loop mode, cycle to next track seamlessly
+    if (isLoopMode) {
+      currentLoopIndex = (currentLoopIndex + 1) % loopQueue.length;
+    }
+
     const pauseTime = isLoopMode ? 1000 : BREATH_GAP_MS;
     setTimeout(() => {
       if (isAutoPlaying) playNextAudioLoop();
@@ -588,21 +660,21 @@ function getCooldownLeft() {
 
 function updateUIForTargetType() {
   elements.targetTypeSelect.value = state.targetType;
+  elements.targetInput.disabled = false; // Always allow input now
+
   if (state.targetType === "time") {
     elements.presetRowCount.classList.add("hidden");
     elements.presetRowTime.classList.remove("hidden");
     elements.targetInput.placeholder = "Example: 30";
-    elements.targetInput.disabled = false;
   } else {
     elements.presetRowCount.classList.remove("hidden");
     elements.presetRowTime.classList.add("hidden");
-    elements.targetInput.placeholder = "Example: 108";
 
-    // Lock target if in loop mode
+    // Change placeholder to indicate "Sets" for loops
     if (isLoopMode) {
-      elements.targetInput.disabled = true;
+      elements.targetInput.placeholder = "Number of Sets (e.g. 5)";
     } else {
-      elements.targetInput.disabled = false;
+      elements.targetInput.placeholder = "Example: 108";
     }
   }
 }
@@ -613,35 +685,49 @@ function render() {
   let isDone = false;
 
   updateUIForTargetType();
-
-  const presetDurations = {
-    "0514.MP3": 92,
-    "0514 (1).MP3": 78,
-    "0514 (2).MP3": 118,
-    "0514 (3).MP3": 16,
-    "0514 (4).MP3": 14,
-    "0514 (5).MP3": 41,
-    "0514 (6).MP3": 204,
-    "0514 (7).MP3": 149,
-    "0514 (8).MP3": 120,
-    "0514 (9).MP3": 420,
-    "0514 (10).MP3": 168,
-    "0514 (11).MP3": 175,
-    "0514 (12).MP3": 256,
-    "0514 (13).MP3": 306,
-    "0514 (14).MP3": 310,
-    "0514 (15).MP3": 139,
-    "0514 (16).MP3": 1724,
-    "0514 (17).MP3": 374,
-    "0514 (18).MP3": 243,
-  };
+  const actualTarget = getActualTarget();
 
   if (state.targetType === "count" && currentAudioId) {
-    if (isLoopMode) {
-      // Hide Est Time for Loop because playlist durations vary wildly
-      elements.estTimeCard.classList.add("hidden");
+    let duration = 0;
+    let totalSeconds = 0;
+    const speed = parseFloat(elements.speedSelect.value) || 1;
+    const left = Math.max(actualTarget - state.done, 0);
+
+    if (left === 0) {
+      elements.estTimeCard.classList.remove("hidden");
+      elements.estTimeText.textContent = "Done";
+    } else if (isLoopMode && loopQueue.length > 0) {
+      elements.estTimeCard.classList.remove("hidden");
+
+      // Accurately calculate time for all remaining loop sets & partial tracks
+      let cycleDuration = 0;
+      loopQueue.forEach((track) => {
+        const d = presetDurations[track.src] || 120;
+        cycleDuration += d / speed + 1000 / 1000;
+      });
+
+      const fullCyclesLeft = Math.floor(left / loopQueue.length);
+      const partialTracksLeft = left % loopQueue.length;
+
+      totalSeconds += fullCyclesLeft * cycleDuration;
+
+      let tempIndex = currentLoopIndex;
+      for (let i = 0; i < partialTracksLeft; i++) {
+        const track = loopQueue[tempIndex];
+        const d = presetDurations[track.src] || 120;
+        totalSeconds += d / speed + 1000 / 1000;
+        tempIndex = (tempIndex + 1) % loopQueue.length;
+      }
+
+      totalSeconds = Math.ceil(totalSeconds);
+
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = totalSeconds % 60;
+      if (h > 0) elements.estTimeText.textContent = `${h}h ${m}m`;
+      else if (m > 0) elements.estTimeText.textContent = `${m}m ${s}s`;
+      else elements.estTimeText.textContent = `${s}s`;
     } else {
-      let duration = 0;
       if (currentAudioId === "preset" && elements.presetAudioSelect.value) {
         duration =
           presetDurations[elements.presetAudioSelect.value] ||
@@ -652,21 +738,15 @@ function render() {
 
       if (duration) {
         elements.estTimeCard.classList.remove("hidden");
-        const speed = parseFloat(elements.speedSelect.value) || 1;
         const loopTime = duration / speed + BREATH_GAP_MS / 1000;
-        const left = Math.max(state.target - state.done, 0);
-        const totalSeconds = Math.ceil(left * loopTime);
+        totalSeconds = Math.ceil(left * loopTime);
 
-        if (left === 0) {
-          elements.estTimeText.textContent = "Done";
-        } else {
-          const h = Math.floor(totalSeconds / 3600);
-          const m = Math.floor((totalSeconds % 3600) / 60);
-          const s = totalSeconds % 60;
-          if (h > 0) elements.estTimeText.textContent = `${h}h ${m}m`;
-          else if (m > 0) elements.estTimeText.textContent = `${m}m ${s}s`;
-          else elements.estTimeText.textContent = `${s}s`;
-        }
+        const h = Math.floor(totalSeconds / 3600);
+        const m = Math.floor((totalSeconds % 3600) / 60);
+        const s = totalSeconds % 60;
+        if (h > 0) elements.estTimeText.textContent = `${h}h ${m}m`;
+        else if (m > 0) elements.estTimeText.textContent = `${m}m ${s}s`;
+        else elements.estTimeText.textContent = `${s}s`;
       } else {
         elements.estTimeCard.classList.add("hidden");
       }
@@ -685,11 +765,11 @@ function render() {
     elements.targetText.textContent = `${state.target}m`;
     elements.leftCount.textContent = `${Math.ceil(timeLeft / 60000)}m`;
   } else {
-    const left = Math.max(state.target - state.done, 0);
-    progress = state.target > 0 ? Math.min(state.done / state.target, 1) : 0;
-    isDone = state.done >= state.target;
+    const left = Math.max(actualTarget - state.done, 0);
+    progress = actualTarget > 0 ? Math.min(state.done / actualTarget, 1) : 0;
+    isDone = state.done >= actualTarget;
 
-    elements.targetText.textContent = state.target;
+    elements.targetText.textContent = actualTarget;
     elements.leftCount.textContent = left;
   }
 
@@ -819,14 +899,14 @@ elements.targetTypeSelect.addEventListener("change", (e) => {
 });
 
 function setTarget(value) {
-  if (isLoopMode) return; // Prevent modifying target while a Loop is active
-
   const nextTarget = Number.parseInt(value, 10);
   if (!Number.isFinite(nextTarget) || nextTarget < 1) return;
   state.target = nextTarget;
 
+  const actualTarget = getActualTarget();
+
   if (state.targetType === "count") {
-    state.done = Math.min(state.done, state.target);
+    state.done = Math.min(state.done, actualTarget);
   }
 
   if (state.done === 0) {
@@ -837,7 +917,7 @@ function setTarget(value) {
 
   if (
     state.targetType === "count" &&
-    state.done >= state.target &&
+    state.done >= actualTarget &&
     !state.historyRecorded
   ) {
     addHistorySet({ status: "Completed" });
