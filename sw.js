@@ -1,4 +1,4 @@
-const CACHE_NAME = "manthara-counter-v13"; // Bumped version for update
+const CACHE_NAME = "manthara-counter-v14"; // Bumped version for update
 
 // By adding ALL preset MP3s here, they will download directly to the
 // user's PC/Mobile phone immediately upon installation for offline use!
@@ -29,6 +29,10 @@ const APP_FILES = [
   "./0514 (16).MP3",
   "./0514 (17).MP3",
   "./0514 (18).MP3",
+  "./0514 (19).MP3",
+  "./0514 (20).MP3",
+  "./0514 (21).MP3",
+  "./0514 (22).MP3",
 ];
 
 self.addEventListener("install", (event) => {
